@@ -82,7 +82,7 @@ def listar_tarefas(
             
         tarefas_filtradas.append(tarefa)
 
-        return tarefas_filtradas
+    return tarefas_filtradas
 
 
 # Listar tarefa por ID
