@@ -1,0 +1,34 @@
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Cache e arquivos compilados do Python
+__pycache__/
+*.py[cod]
+
+# Variáveis de ambiente locais
+.env
+.env.*
+!.env.example
+
+# Cache de testes e ferramentas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Arquivos de distribuição
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+Desktop.ini
