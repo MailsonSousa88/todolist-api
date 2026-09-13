@@ -34,3 +34,11 @@ class TarefaSchemaPublico(BaseModel):
 # Permite atualizar a tarefa
 class TarefaSchemaAtualizado(TarefaSchema):
     concluida: bool
+
+# Permite o retorno das respostas paginadas
+class TarefaSchemaPaginada(BaseModel):
+    pagina: int 
+    limite: int
+    total: int
+    tarefas: list[TarefaSchemaPublico]
+    

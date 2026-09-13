@@ -5,10 +5,11 @@ from tarefa_schema import (
     TarefaSchemaBD,
     TarefaSchemaPublico,
     TarefaSchemaAtualizado,
+    TarefaSchemaPaginada
 )
 from uuid import UUID
 from repositorio_de_tarefas import listaDeTarefas
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 app = FastAPI()
@@ -30,32 +31,36 @@ def root():
 
 @app.get(
     "/tarefas",
-    response_model=list[TarefaSchemaPublico],
+    response_model=list[TarefaSchemaPublico] | TarefaSchemaPaginada,
     status_code=HTTPStatus.OK,
     summary="Listar Tarefas",
-    description="Lista todas as tarefas e permite filtros por situação, tag e título, além de ordenação por campo e direção.",
+    description="Lista tarefas com filtros por situação, tag, título e período de criação, além de ordenação e paginação opcional.",
 )
 def listar_tarefas(
     concluida: Annotated[
         bool | None,
         Query(
-            title="Filtro de Situação", 
-            description="Filtra todas tarefas por situação"
+            title="Filtro de Situação", description="Filtra todas tarefas por situação"
         ),
     ] = None,
     tag: Annotated[
         str | None,
-        Query(
-            title="Filtro de Tags", 
-            description="Filtra todas as tarefas pela tag"
-        ),
+        Query(title="Filtro de Tags", description="Filtra todas as tarefas pela tag"),
     ] = None,
     titulo: Annotated[
         str | None,
         Query(
-            title="Filtro de Titulos", 
-            description="Filtra todas tarefas através do titulo."
+            title="Filtro de Titulos",
+            description="Filtra todas tarefas através do titulo.",
         ),
+    ] = None,
+    data_inicio: Annotated[
+        date | None,
+        Query(description="Data inicial de criação, inclusive, no formato YYYY-MM-DD"),
+    ] = None,
+    data_fim: Annotated[
+        date | None,
+        Query(description="Data final de criação, inclusive, no formato YYYY-MM-DD"),
     ] = None,
     ordenar_por: Annotated[
         Literal["id", "titulo", "data_criacao", "data_atualizacao"],
@@ -65,16 +70,51 @@ def listar_tarefas(
         Literal["asc", "desc"],
         Query(description="Direção da ordenação: crescente ou decrescente"),
     ] = "asc",
-) -> list[TarefaSchemaBD]:
+    pagina: Annotated[int | None, Query(ge=1, description="Define o número da página")] = None,
+    limite: Annotated[
+        int | None, Query(ge=1, description="Define o limite de tarefas que serão exibidas")
+    ] = None,
+) -> list[TarefaSchemaBD] | dict:
 
-    if concluida is None and tag is None and titulo is None:
+    if data_inicio is not None and data_fim is not None:
+        if data_inicio > data_fim:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="A data inicial não pode ser posterior à data final.",
+            )
+
+    paginada = pagina is not None or limite is not None
+    pagina = pagina if pagina is not None else 1
+    limite = limite if limite is not None else 5
+
+    # Usaremos a propriedade de inicio:fim dos arrays
+    inicio: int = (pagina - 1) * limite
+    fim: int = inicio + limite
+
+    if (
+        concluida is None
+        and tag is None
+        and titulo is None
+        and data_inicio is None
+        and data_fim is None
+    ):
 
         # Sem filtros: ordena todas as tarefas.
-        return sorted(
+        tarefas_ordenadas_sem_filtros = sorted(
             listaDeTarefas,
             key=lambda tarefa: getattr(tarefa, ordenar_por),
             reverse=(ordem == "desc"),
         )
+
+        if not paginada:
+            return tarefas_ordenadas_sem_filtros
+
+        return {
+            "pagina": pagina,
+            "limite": limite,
+            "total": len(tarefas_ordenadas_sem_filtros),
+            "tarefas": tarefas_ordenadas_sem_filtros[inicio:fim],
+        }
 
     tarefas_filtradas: list[TarefaSchemaBD] = []
 
@@ -92,15 +132,36 @@ def listar_tarefas(
         if titulo is not None:
             if titulo.lower() not in tarefa.titulo.lower():
                 continue
-            
+
+        # Compara somente a data para incluir todos os horários do dia final.
+        data_da_tarefa = tarefa.data_criacao.date()
+
+        if data_inicio is not None:
+            if data_da_tarefa < data_inicio:
+                continue
+
+        if data_fim is not None:
+            if data_da_tarefa > data_fim:
+                continue
+
         tarefas_filtradas.append(tarefa)
 
     # Com filtros: ordena somente as tarefas selecionadas.
-    return sorted(
+    tarefas_ordenadas_com_filtros = sorted(
         tarefas_filtradas,
         key=lambda tarefa: getattr(tarefa, ordenar_por),
         reverse=(ordem == "desc"),
     )
+
+    if not paginada:
+        return tarefas_ordenadas_com_filtros
+
+    return {
+        "pagina": pagina,
+        "limite": limite,
+        "total": len(tarefas_ordenadas_com_filtros),
+        "tarefas": tarefas_ordenadas_com_filtros[inicio:fim],
+    }
 
 
 # Listar tarefa por ID
@@ -178,6 +239,7 @@ def excluir_tarefa(id: UUID):
     for idx, t in enumerate(listaDeTarefas):
         if t.id == id:
             del listaDeTarefas[idx]
+            return
 
     raise HTTPException(
         status_code=HTTPStatus.NOT_FOUND, detail="A tarefa não foi encontrada."
