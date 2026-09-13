@@ -9,7 +9,7 @@ from tarefa_schema import (
 from uuid import UUID
 from repositorio_de_tarefas import listaDeTarefas
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 app = FastAPI()
 
@@ -33,7 +33,7 @@ def root():
     response_model=list[TarefaSchemaPublico],
     status_code=HTTPStatus.OK,
     summary="Listar Tarefas",
-    description="Lista todas as tarefas e permite filtros por situação e tag",
+    description="Lista todas as tarefas e permite filtros por situação, tag e título, além de ordenação por campo e direção.",
 )
 def listar_tarefas(
     concluida: Annotated[
@@ -57,11 +57,24 @@ def listar_tarefas(
             description="Filtra todas tarefas através do titulo."
         ),
     ] = None,
-) -> list[TarefaSchema]:
+    ordenar_por: Annotated[
+        Literal["id", "titulo", "data_criacao", "data_atualizacao"],
+        Query(description="Campo usado para ordenar as tarefas"),
+    ] = "id",
+    ordem: Annotated[
+        Literal["asc", "desc"],
+        Query(description="Direção da ordenação: crescente ou decrescente"),
+    ] = "asc",
+) -> list[TarefaSchemaBD]:
 
     if concluida is None and tag is None and titulo is None:
 
-        return listaDeTarefas
+        # Sem filtros: ordena todas as tarefas.
+        return sorted(
+            listaDeTarefas,
+            key=lambda tarefa: getattr(tarefa, ordenar_por),
+            reverse=(ordem == "desc"),
+        )
 
     tarefas_filtradas: list[TarefaSchemaBD] = []
 
@@ -82,7 +95,12 @@ def listar_tarefas(
             
         tarefas_filtradas.append(tarefa)
 
-    return tarefas_filtradas
+    # Com filtros: ordena somente as tarefas selecionadas.
+    return sorted(
+        tarefas_filtradas,
+        key=lambda tarefa: getattr(tarefa, ordenar_por),
+        reverse=(ordem == "desc"),
+    )
 
 
 # Listar tarefa por ID
@@ -90,7 +108,7 @@ def listar_tarefas(
 
 @app.get(
     "/tarefas/{id}",
-    response_model=TarefaSchema,
+    response_model=TarefaSchemaPublico,
     status_code=HTTPStatus.OK,
     summary="Consultar tarefa por ID",
     description="Consulta uma tarefa pelo seu UUID. Retorna 404 se a tarefa não existir.",
@@ -160,8 +178,6 @@ def excluir_tarefa(id: UUID):
     for idx, t in enumerate(listaDeTarefas):
         if t.id == id:
             del listaDeTarefas[idx]
-
-            return t
 
     raise HTTPException(
         status_code=HTTPStatus.NOT_FOUND, detail="A tarefa não foi encontrada."
