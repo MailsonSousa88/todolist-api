@@ -1,16 +1,18 @@
-from fastapi import FastAPI, HTTPException, Query
+from datetime import date
 from http import HTTPStatus
+from typing import Annotated, Literal
+from uuid import UUID
+
+from fastapi import FastAPI, HTTPException, Query
+
+from repositorio_de_tarefas import listaDeTarefas
 from tarefa_schema import (
     TarefaSchema,
-    TarefaSchemaBD,
-    TarefaSchemaPublico,
     TarefaSchemaAtualizado,
-    TarefaSchemaPaginada
+    TarefaSchemaBD,
+    TarefaSchemaPaginada,
+    TarefaSchemaPublico,
 )
-from uuid import UUID
-from repositorio_de_tarefas import listaDeTarefas
-from datetime import date, datetime
-from typing import Annotated, Literal
 
 app = FastAPI()
 
@@ -76,12 +78,15 @@ def listar_tarefas(
     ] = None,
 ) -> list[TarefaSchemaBD] | dict:
 
-    if data_inicio is not None and data_fim is not None:
-        if data_inicio > data_fim:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="A data inicial não pode ser posterior à data final.",
-            )
+    if (
+        data_inicio is not None
+        and data_fim is not None
+        and data_inicio > data_fim
+    ):
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="A data inicial não pode ser posterior à data final.",
+        )
 
     paginada = pagina is not None or limite is not None
     pagina = pagina if pagina is not None else 1
@@ -121,28 +126,23 @@ def listar_tarefas(
     # 1. Loop de verificação
     for tarefa in listaDeTarefas:
         # 1.1 Verifica se a query "concluida" foi informado
-        if concluida is not None:
-            if tarefa.concluida != concluida:
-                continue
+        if concluida is not None and tarefa.concluida != concluida:
+            continue
         # 1.2 Verifica se a query "tag" foi informado
-        if tag is not None:
-            if tag not in tarefa.tags:
-                continue
+        if tag is not None and tag not in tarefa.tags:
+            continue
         # 1.3 Verifica se a query "titulo" foi informado
-        if titulo is not None:
-            if titulo.lower() not in tarefa.titulo.lower():
-                continue
+        if titulo is not None and titulo.lower() not in tarefa.titulo.lower():
+            continue
 
         # Compara somente a data para incluir todos os horários do dia final.
         data_da_tarefa = tarefa.data_criacao.date()
 
-        if data_inicio is not None:
-            if data_da_tarefa < data_inicio:
-                continue
+        if data_inicio is not None and data_da_tarefa < data_inicio:
+            continue
 
-        if data_fim is not None:
-            if data_da_tarefa > data_fim:
-                continue
+        if data_fim is not None and data_da_tarefa > data_fim:
+            continue
 
         tarefas_filtradas.append(tarefa)
 
