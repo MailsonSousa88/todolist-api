@@ -1,8 +1,9 @@
 # Esse SCHEMA representa o contrato que os objetos do tipo tarefa devem seguir
-from pydantic import BaseModel, Field
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID, uuid4
-from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 # Base do schema das tarefas
